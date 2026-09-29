@@ -86,8 +86,11 @@ public class Title : IComponent
         float counterTextHeight = Settings.ShowCount ? g.MeasureString("A", counterFont).Height : 0;
         float singleLineMinimum = Math.Max(titleTextHeight, counterTextHeight) + 4;
         float twoLineMinimum = titleTextHeight * 1.7f;
-        MinimumHeight = Settings.SingleLine ? singleLineMinimum : twoLineMinimum;
-        VerticalHeight = !Settings.SingleLine
+        bool hasTwoLines = !Settings.SingleLine
+            && !string.IsNullOrEmpty(GameNameLabel.Text)
+            && !string.IsNullOrEmpty(CategoryNameLabel.Text);
+        MinimumHeight = hasTwoLines ? twoLineMinimum : singleLineMinimum;
+        VerticalHeight = hasTwoLines
             ? twoLineMinimum
             : Settings.HeightMode == TitleHeightMode.Custom
                 ? Math.Max(Settings.CustomHeight, singleLineMinimum)
