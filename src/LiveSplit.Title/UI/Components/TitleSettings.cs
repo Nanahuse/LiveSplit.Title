@@ -5,8 +5,16 @@ using System.Xml;
 
 namespace LiveSplit.UI.Components;
 
+public enum TitleHeightMode { Auto, Custom }
+public enum CounterVerticalAlignment { Top, Center, Bottom }
+
 public partial class TitleSettings : UserControl
 {
+    private ComboBox heightModeControl;
+    private NumericUpDown customHeightControl;
+    private ComboBox counterAlignmentControl;
+    private CheckBox overrideCounterFontControl;
+    private Button counterFontButton;
     public bool ShowGameName { get; set; }
     public bool ShowCategoryName { get; set; }
     public bool ShowAttemptCount { get; set; }
@@ -15,6 +23,11 @@ public partial class TitleSettings : UserControl
     public AlignmentType TextAlignment { get; set; }
     public bool SingleLine { get; set; }
     public bool DisplayGameIcon { get; set; }
+    public TitleHeightMode HeightMode { get; set; }
+    public float CustomHeight { get; set; }
+    public bool OverrideCounterFont { get; set; }
+    public Font CounterFont { get; set; }
+    public CounterVerticalAlignment CounterVerticalAlignment { get; set; }
 
     public bool ShowRegion { get; set; }
     public bool ShowPlatform { get; set; }
@@ -47,6 +60,10 @@ public partial class TitleSettings : UserControl
         TitleColor = Color.FromArgb(255, 255, 255, 255);
         OverrideTitleColor = false;
         SingleLine = false;
+        HeightMode = TitleHeightMode.Auto;
+        CustomHeight = 32;
+        CounterFont = (Font)SystemFonts.DefaultFont.Clone();
+        CounterVerticalAlignment = LiveSplit.UI.Components.CounterVerticalAlignment.Center;
         ShowRegion = false;
         ShowPlatform = false;
         ShowVariables = true;
@@ -69,6 +86,27 @@ public partial class TitleSettings : UserControl
         chkRegion.DataBindings.Add("Checked", this, "ShowRegion", false, DataSourceUpdateMode.OnPropertyChanged);
         chkPlatform.DataBindings.Add("Checked", this, "ShowPlatform", false, DataSourceUpdateMode.OnPropertyChanged);
         chkVariables.DataBindings.Add("Checked", this, "ShowVariables", false, DataSourceUpdateMode.OnPropertyChanged);
+        var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true };
+        heightModeControl = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 85 };
+        heightModeControl.Items.AddRange(new object[] { "Auto", "Custom" }); heightModeControl.SelectedIndex = 0;
+        heightModeControl.SelectedIndexChanged += (_, _) => HeightMode = (TitleHeightMode)heightModeControl.SelectedIndex;
+        customHeightControl = new NumericUpDown { Minimum = 1, Maximum = 1000, Width = 60, Value = 32 };
+        customHeightControl.ValueChanged += (_, _) => CustomHeight = (float)customHeightControl.Value;
+        counterAlignmentControl = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 80 };
+        counterAlignmentControl.Items.AddRange(new object[] { "Top", "Center", "Bottom" }); counterAlignmentControl.SelectedIndex = 1;
+        counterAlignmentControl.SelectedIndexChanged += (_, _) => CounterVerticalAlignment = (CounterVerticalAlignment)counterAlignmentControl.SelectedIndex;
+        overrideCounterFontControl = new CheckBox { Text = "Override Counter Font", AutoSize = true };
+        counterFontButton = new Button { Text = "Font...", AutoSize = true, Enabled = false };
+        overrideCounterFontControl.CheckedChanged += (_, _) => { OverrideCounterFont = overrideCounterFontControl.Checked; counterFontButton.Enabled = overrideCounterFontControl.Checked; };
+        counterFontButton.Click += (_, _) => { using var dialog = new FontDialog { Font = CounterFont }; if (dialog.ShowDialog(this) == DialogResult.OK) CounterFont = (Font)dialog.Font.Clone(); };
+        panel.Controls.Add(new Label { Text = "Height Mode", AutoSize = true }); panel.Controls.Add(heightModeControl);
+        panel.Controls.Add(new Label { Text = "Custom Height", AutoSize = true }); panel.Controls.Add(customHeightControl);
+        panel.Controls.Add(new Label { Text = "Counter Vertical Alignment", AutoSize = true }); panel.Controls.Add(counterAlignmentControl);
+        panel.Controls.Add(overrideCounterFontControl); panel.Controls.Add(counterFontButton);
+        tableLayoutPanel1.RowCount = 8;
+        tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 62F));
+        tableLayoutPanel1.Controls.Add(panel, 0, 7); tableLayoutPanel1.SetColumnSpan(panel, 4);
+        Size = new Size(Width, Height + 62);
     }
 
     private void TitleSettings_Load(object sender, EventArgs e)
@@ -132,6 +170,16 @@ public partial class TitleSettings : UserControl
         ShowRegion = SettingsHelper.ParseBool(element["ShowRegion"], false);
         ShowPlatform = SettingsHelper.ParseBool(element["ShowPlatform"], false);
         ShowVariables = SettingsHelper.ParseBool(element["ShowVariables"], true);
+        HeightMode = Enum.TryParse<TitleHeightMode>(SettingsHelper.ParseString(element["HeightMode"], "Auto"), out TitleHeightMode parsedMode) ? parsedMode : TitleHeightMode.Auto;
+        float.TryParse(SettingsHelper.ParseString(element["CustomHeight"], "32"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float parsedHeight);
+        CustomHeight = parsedHeight > 0 ? parsedHeight : 32;
+        OverrideCounterFont = SettingsHelper.ParseBool(element["OverrideCounterFont"], false);
+        CounterFont = SettingsHelper.GetFontFromElement(element["CounterFont"]) ?? CounterFont;
+        CounterVerticalAlignment = Enum.TryParse(SettingsHelper.ParseString(element["CounterVerticalAlignment"], "Center"), out CounterVerticalAlignment parsedAlignment) ? parsedAlignment : LiveSplit.UI.Components.CounterVerticalAlignment.Center;
+        heightModeControl.SelectedIndex = (int)HeightMode;
+        customHeightControl.Value = (decimal)Math.Max(1, Math.Min(1000, CustomHeight));
+        counterAlignmentControl.SelectedIndex = (int)CounterVerticalAlignment;
+        overrideCounterFontControl.Checked = OverrideCounterFont;
     }
 
     public XmlNode GetSettings(XmlDocument document)
@@ -163,7 +211,12 @@ public partial class TitleSettings : UserControl
         SettingsHelper.CreateSetting(document, parent, "ShowRegion", ShowRegion) ^
         SettingsHelper.CreateSetting(document, parent, "ShowPlatform", ShowPlatform) ^
         SettingsHelper.CreateSetting(document, parent, "ShowVariables", ShowVariables) ^
-        SettingsHelper.CreateSetting(document, parent, "TextAlignment", (int)TextAlignment);
+        SettingsHelper.CreateSetting(document, parent, "TextAlignment", (int)TextAlignment) ^
+        SettingsHelper.CreateSetting(document, parent, "HeightMode", HeightMode) ^
+        SettingsHelper.CreateSetting(document, parent, "CustomHeight", CustomHeight) ^
+        SettingsHelper.CreateSetting(document, parent, "OverrideCounterFont", OverrideCounterFont) ^
+        SettingsHelper.CreateSetting(document, parent, "CounterVerticalAlignment", CounterVerticalAlignment) ^
+        SettingsHelper.CreateSetting(document, parent, "CounterFont", CounterFont);
     }
 
     private void ColorButtonClick(object sender, EventArgs e)

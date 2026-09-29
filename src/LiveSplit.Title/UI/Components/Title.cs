@@ -1,4 +1,4 @@
-﻿using LiveSplit.Model;
+using LiveSplit.Model;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -81,8 +81,17 @@ public class Title : IComponent
 
         TitleFont = Settings.OverrideTitleFont ? Settings.TitleFont : state.LayoutSettings.TextFont;
 
-        MinimumHeight = g.MeasureString("A", TitleFont).Height * 1.7f;
-        VerticalHeight = g.MeasureString("A", TitleFont).Height * 1.7f;
+        Font counterFont = Settings.OverrideCounterFont ? Settings.CounterFont : TitleFont;
+        float titleTextHeight = g.MeasureString("A", TitleFont).Height;
+        float counterTextHeight = Settings.ShowCount ? g.MeasureString("A", counterFont).Height : 0;
+        float singleLineMinimum = Math.Max(titleTextHeight, counterTextHeight) + 4;
+        float twoLineMinimum = titleTextHeight * 1.7f;
+        MinimumHeight = Settings.SingleLine ? singleLineMinimum : twoLineMinimum;
+        VerticalHeight = !Settings.SingleLine
+            ? twoLineMinimum
+            : Settings.HeightMode == TitleHeightMode.Custom
+                ? Math.Max(Settings.CustomHeight, singleLineMinimum)
+                : singleLineMinimum;
         bool showGameIcon = state.Run.GameIcon != null && Settings.DisplayGameIcon;
         if (showGameIcon)
         {
@@ -168,12 +177,18 @@ public class Title : IComponent
         if (Settings.ShowCount)
         {
             AttemptCountLabel.HorizontalAlignment = StringAlignment.Far;
-            AttemptCountLabel.VerticalAlignment = StringAlignment.Far;
+            AttemptCountLabel.VerticalAlignment = Settings.CounterVerticalAlignment switch
+            {
+                CounterVerticalAlignment.Top => StringAlignment.Near,
+                CounterVerticalAlignment.Bottom => StringAlignment.Far,
+                _ => StringAlignment.Center
+            };
             AttemptCountLabel.X = 0;
-            AttemptCountLabel.Y = height - 40;
+            float verticalPadding = Settings.SingleLine ? 2 : 0;
+            AttemptCountLabel.Y = verticalPadding;
             AttemptCountLabel.Width = width - 5;
-            AttemptCountLabel.Height = 40;
-            AttemptCountLabel.Font = TitleFont;
+            AttemptCountLabel.Height = Math.Max(0, height - verticalPadding * 2);
+            AttemptCountLabel.Font = Settings.OverrideCounterFont ? Settings.CounterFont : TitleFont;
             AttemptCountLabel.Brush = new SolidBrush(Settings.OverrideTitleColor ? Settings.TitleColor : state.LayoutSettings.TextColor);
             AttemptCountLabel.HasShadow = state.LayoutSettings.DropShadows;
             AttemptCountLabel.ShadowColor = state.LayoutSettings.ShadowsColor;
@@ -199,9 +214,10 @@ public class Title : IComponent
         }
 
         GameNameLabel.HorizontalAlignment = StringAlignment.Near;
-        GameNameLabel.VerticalAlignment = string.IsNullOrEmpty(CategoryNameLabel.Text) ? StringAlignment.Center : StringAlignment.Near;
-        GameNameLabel.Y = 0;
-        GameNameLabel.Height = height;
+        GameNameLabel.VerticalAlignment = Settings.SingleLine || string.IsNullOrEmpty(CategoryNameLabel.Text) ? StringAlignment.Center : StringAlignment.Near;
+        float verticalPadding = Settings.SingleLine ? 2 : 0;
+        GameNameLabel.Y = verticalPadding;
+        GameNameLabel.Height = Math.Max(0, height - verticalPadding * 2);
         GameNameLabel.Font = TitleFont;
         GameNameLabel.Brush = new SolidBrush(Settings.OverrideTitleColor ? Settings.TitleColor : state.LayoutSettings.TextColor);
         GameNameLabel.HasShadow = state.LayoutSettings.DropShadows;
@@ -221,8 +237,9 @@ public class Title : IComponent
         }
 
         float aspectRatio = (float)icon.Width / icon.Height;
-        float drawWidth = height - 4;
-        float drawHeight = height - 4;
+        float drawWidth = Math.Max(0, height - 4);
+        float drawHeight = Math.Max(0, height - 4);
+        if (drawWidth <= 0 || drawHeight <= 0) return;
         if (icon.Width > icon.Height)
         {
             float ratio = icon.Height / (float)icon.Width;
