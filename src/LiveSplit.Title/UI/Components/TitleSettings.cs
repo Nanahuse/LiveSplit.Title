@@ -13,7 +13,11 @@ public partial class TitleSettings : UserControl
     private ComboBox heightModeControl;
     private NumericUpDown customHeightControl;
     private ComboBox counterAlignmentControl;
+    private CheckBox overrideTitleFontControl;
+    private Label titleFontLabel;
+    private Button titleFontButton;
     private CheckBox overrideCounterFontControl;
+    private Label counterFontLabel;
     private Button counterFontButton;
     public bool ShowGameName { get; set; }
     public bool ShowCategoryName { get; set; }
@@ -59,6 +63,7 @@ public partial class TitleSettings : UserControl
         DisplayGameIcon = true;
         TitleColor = Color.FromArgb(255, 255, 255, 255);
         OverrideTitleColor = false;
+        TitleFont = (Font)SystemFonts.DefaultFont.Clone();
         SingleLine = false;
         HeightMode = TitleHeightMode.Auto;
         CustomHeight = 32;
@@ -86,7 +91,8 @@ public partial class TitleSettings : UserControl
         chkRegion.DataBindings.Add("Checked", this, "ShowRegion", false, DataSourceUpdateMode.OnPropertyChanged);
         chkPlatform.DataBindings.Add("Checked", this, "ShowPlatform", false, DataSourceUpdateMode.OnPropertyChanged);
         chkVariables.DataBindings.Add("Checked", this, "ShowVariables", false, DataSourceUpdateMode.OnPropertyChanged);
-        var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true };
+        var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true };
+        var heightPanel = new FlowLayoutPanel { AutoSize = true, WrapContents = true };
         heightModeControl = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 85 };
         heightModeControl.Items.AddRange(new object[] { "Auto", "Custom" }); heightModeControl.SelectedIndex = 0;
         heightModeControl.SelectedIndexChanged += (_, _) => HeightMode = (TitleHeightMode)heightModeControl.SelectedIndex;
@@ -95,18 +101,54 @@ public partial class TitleSettings : UserControl
         counterAlignmentControl = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 80 };
         counterAlignmentControl.Items.AddRange(new object[] { "Top", "Center", "Bottom" }); counterAlignmentControl.SelectedIndex = 1;
         counterAlignmentControl.SelectedIndexChanged += (_, _) => CounterVerticalAlignment = (CounterVerticalAlignment)counterAlignmentControl.SelectedIndex;
-        overrideCounterFontControl = new CheckBox { Text = "Override Counter Font", AutoSize = true };
-        counterFontButton = new Button { Text = "Font...", AutoSize = true, Enabled = false };
-        overrideCounterFontControl.CheckedChanged += (_, _) => { OverrideCounterFont = overrideCounterFontControl.Checked; counterFontButton.Enabled = overrideCounterFontControl.Checked; };
-        counterFontButton.Click += (_, _) => { using var dialog = new FontDialog { Font = CounterFont }; if (dialog.ShowDialog(this) == DialogResult.OK) CounterFont = (Font)dialog.Font.Clone(); };
-        panel.Controls.Add(new Label { Text = "Height Mode", AutoSize = true }); panel.Controls.Add(heightModeControl);
-        panel.Controls.Add(new Label { Text = "Custom Height", AutoSize = true }); panel.Controls.Add(customHeightControl);
-        panel.Controls.Add(new Label { Text = "Counter Vertical Alignment", AutoSize = true }); panel.Controls.Add(counterAlignmentControl);
-        panel.Controls.Add(overrideCounterFontControl); panel.Controls.Add(counterFontButton);
+        heightPanel.Controls.Add(new Label { Text = "Height Mode", AutoSize = true }); heightPanel.Controls.Add(heightModeControl);
+        heightPanel.Controls.Add(new Label { Text = "Custom Height", AutoSize = true }); heightPanel.Controls.Add(customHeightControl);
+        heightPanel.Controls.Add(new Label { Text = "Counter Vertical Alignment", AutoSize = true }); heightPanel.Controls.Add(counterAlignmentControl);
+        panel.Controls.Add(heightPanel);
+
+        overrideTitleFontControl = new CheckBox { Text = "Override Layout Settings", AutoSize = true };
+        titleFontLabel = new Label { Text = SettingsHelper.FormatFont(TitleFont), AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Right };
+        titleFontButton = new Button { Text = "Choose...", AutoSize = true };
+        overrideTitleFontControl.CheckedChanged += (_, _) => { OverrideTitleFont = overrideTitleFontControl.Checked; titleFontLabel.Enabled = titleFontButton.Enabled = overrideTitleFontControl.Checked; };
+        titleFontButton.Click += (_, _) => SelectFont(TitleFont, 11, 26, font => { TitleFont = font; titleFontLabel.Text = SettingsHelper.FormatFont(TitleFont); });
+        panel.Controls.Add(CreateFontGroup("Title Font", overrideTitleFontControl, titleFontLabel, titleFontButton));
+
+        overrideCounterFontControl = new CheckBox { Text = "Override Setting", AutoSize = true };
+        counterFontLabel = new Label { Text = SettingsHelper.FormatFont(CounterFont), AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Right };
+        counterFontButton = new Button { Text = "Choose...", AutoSize = true };
+        overrideCounterFontControl.CheckedChanged += (_, _) => { OverrideCounterFont = overrideCounterFontControl.Checked; counterFontLabel.Enabled = counterFontButton.Enabled = overrideCounterFontControl.Checked; };
+        counterFontButton.Click += (_, _) => SelectFont(CounterFont, 11, 26, font => { CounterFont = font; counterFontLabel.Text = SettingsHelper.FormatFont(CounterFont); });
+        panel.Controls.Add(CreateFontGroup("Counter Font", overrideCounterFontControl, counterFontLabel, counterFontButton));
         tableLayoutPanel1.RowCount = 8;
-        tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 62F));
+        tableLayoutPanel1.RowStyles[6].Height = 82F;
+        tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 245F));
         tableLayoutPanel1.Controls.Add(panel, 0, 7); tableLayoutPanel1.SetColumnSpan(panel, 4);
-        Size = new Size(Width, Height + 62);
+        Size = new Size(Width, Height + 307);
+    }
+
+    private static GroupBox CreateFontGroup(string title, CheckBox overrideControl, Label fontLabel, Button fontButton)
+    {
+        var group = new GroupBox { Text = title, Width = 440, Height = 76 };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 2, Padding = new Padding(3) };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120F));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 81F));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 25F));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 29F));
+        layout.SetColumnSpan(overrideControl, 3);
+        layout.Controls.Add(overrideControl, 0, 0);
+        layout.Controls.Add(new Label { Text = "Font:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 1);
+        layout.Controls.Add(fontLabel, 1, 1);
+        layout.Controls.Add(fontButton, 2, 1);
+        group.Controls.Add(layout);
+        return group;
+    }
+
+    private void SelectFont(Font currentFont, int minimumSize, int maximumSize, Action<Font> setFont)
+    {
+        CustomFontDialog.FontDialog dialog = SettingsHelper.GetFontDialog(currentFont, minimumSize, maximumSize);
+        dialog.FontChanged += (_, e) => setFont(((CustomFontDialog.FontChangedEventArgs)e).NewFont);
+        dialog.ShowDialog(this);
     }
 
     private void TitleSettings_Load(object sender, EventArgs e)
@@ -141,7 +183,7 @@ public partial class TitleSettings : UserControl
 
         if (version >= new Version(1, 2))
         {
-            TitleFont = SettingsHelper.GetFontFromElement(element["TitleFont"]);
+            TitleFont = SettingsHelper.GetFontFromElement(element["TitleFont"]) ?? TitleFont;
             if (version >= new Version(1, 3))
             {
                 OverrideTitleFont = SettingsHelper.ParseBool(element["OverrideTitleFont"]);
@@ -179,7 +221,10 @@ public partial class TitleSettings : UserControl
         heightModeControl.SelectedIndex = (int)HeightMode;
         customHeightControl.Value = (decimal)Math.Max(1, Math.Min(1000, CustomHeight));
         counterAlignmentControl.SelectedIndex = (int)CounterVerticalAlignment;
+        overrideTitleFontControl.Checked = OverrideTitleFont;
         overrideCounterFontControl.Checked = OverrideCounterFont;
+        titleFontLabel.Text = SettingsHelper.FormatFont(TitleFont);
+        counterFontLabel.Text = SettingsHelper.FormatFont(CounterFont);
     }
 
     public XmlNode GetSettings(XmlDocument document)
@@ -202,6 +247,8 @@ public partial class TitleSettings : UserControl
         SettingsHelper.CreateSetting(document, parent, "ShowAttemptCount", ShowAttemptCount) ^
         SettingsHelper.CreateSetting(document, parent, "ShowFinishedRunsCount", ShowFinishedRunsCount) ^
         SettingsHelper.CreateSetting(document, parent, "OverrideTitleColor", OverrideTitleColor) ^
+        SettingsHelper.CreateSetting(document, parent, "OverrideTitleFont", OverrideTitleFont) ^
+        SettingsHelper.CreateSetting(document, parent, "TitleFont", TitleFont) ^
         SettingsHelper.CreateSetting(document, parent, "SingleLine", SingleLine) ^
         SettingsHelper.CreateSetting(document, parent, "TitleColor", TitleColor) ^
         SettingsHelper.CreateSetting(document, parent, "BackgroundColor", BackgroundColor) ^
